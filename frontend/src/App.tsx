@@ -51,6 +51,12 @@ interface DailyTask {
   claimed: boolean;
 }
 
+interface CheckinState {
+  can_claim: boolean;
+  streak: number;
+  reward: number;
+}
+
 interface ShopItem {
   id: string;
   name: string;
@@ -184,6 +190,8 @@ export default function App() {
   const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
   const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [shopBusy, setShopBusy] = useState<string | null>(null);
+  const [checkin, setCheckin] = useState<CheckinState | null>(null);
+  const [toast, setToast] = useState('');
   const [adoptName, setAdoptName] = useState('');
   const [selectedPersona, setSelectedPersona] = useState(PERSONALITIES[1][0]);
   const endRef = useRef<HTMLDivElement>(null);
@@ -210,6 +218,11 @@ export default function App() {
     if (cat.current_status === 'sleeping') return '唔……你回来啦？让我再眯五分钟。';
     return '你回来啦！我刚刚在窗边发现了一朵猫猫形状的云。';
   }, [cat]);
+
+  function notify(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(''), 2200);
+  }
 
   function sensoryFeedback(kind: 'feed' | 'pet' | 'play' | 'reward') {
     try {
@@ -260,6 +273,7 @@ export default function App() {
     const res = await apiFetch('/api/cat/adopt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const data = await res.json();
     setCat(data); setMessages([{ role: 'cat', content: `喵呜，我是${data.name}。从今天开始，这里就是我们的家啦。` }]);
+    notify('获得新手衣橱 4 件 · 叶子币 30 🍃');
   }
 
   function toggleFavorite(id: string) {
@@ -284,11 +298,23 @@ export default function App() {
   }
 
   async function loadDaily() {
-    const res = await apiFetch('/api/daily');
+    const [taskRes, checkinRes] = await Promise.all([apiFetch('/api/daily'), apiFetch('/api/checkin')]);
+    if (taskRes.ok) {
+      const data = await taskRes.json();
+      setDailyTasks(data.tasks || []);
+      setCat(current => current ? { ...current, leaf_coins: data.leaf_coins } : current);
+    }
+    if (checkinRes.ok) setCheckin(await checkinRes.json());
+  }
+
+  async function claimCheckin() {
+    const res = await apiFetch('/api/checkin', { method: 'POST' });
     if (!res.ok) return;
     const data = await res.json();
-    setDailyTasks(data.tasks || []);
-    setCat(current => current ? { ...current, leaf_coins: data.leaf_coins } : current);
+    sensoryFeedback('reward');
+    notify(`连续陪伴 ${data.streak} 天 · 叶子币 +${data.reward}`);
+    setCat(data.cat);
+    setCheckin({ can_claim: false, streak: data.streak, reward: data.reward });
   }
 
   async function claimTask(taskId: string) {
@@ -296,6 +322,7 @@ export default function App() {
     if (!res.ok) return;
     const data = await res.json();
     sensoryFeedback('reward');
+    notify(`任务完成 · 叶子币 +${data.reward}`);
     setCat(data.cat);
     await loadDaily();
   }
@@ -313,9 +340,10 @@ export default function App() {
     setShopBusy(item.id);
     try {
       const res = await apiFetch('/api/shop/buy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: item.id }) });
-      if (!res.ok) return;
       const data = await res.json();
+      if (!res.ok) { notify(data.detail === 'Not enough leaf coins' ? '叶子币还不够，先去完成任务吧' : '暂时无法购买这件物品'); return; }
       sensoryFeedback('reward');
+      notify(`已获得 ${item.name} ✦`);
       setCat(data.cat);
       setShopItems(items => items.map(entry => entry.id === item.id ? { ...entry, owned: true } : entry));
     } finally { setShopBusy(null); }
@@ -347,6 +375,8 @@ export default function App() {
       const data = await res.json();
       if (res.ok) {
         setCat(data.cat); setCurrentAdventure(null);
+        sensoryFeedback('reward');
+        notify(`探险归来 · 叶子币 +${data.adventure.reward_coins}`);
         setAdventureHistory(items => [data.adventure, ...items]);
       }
     } finally { setAdventureBusy(false); }
@@ -406,6 +436,7 @@ export default function App() {
 
   return <main className="game-shell">
     {particles.map(p => <span className="particle" key={p.id} style={{ left: p.x, top: p.y }}>{p.glyph}</span>)}
+    {toast && <div className="game-toast"><i>✦</i>{toast}</div>}
     <header className="game-header">
       <div><small>MEOWLOG · {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}</small><h1>{cat.name}的小屋</h1></div>
       <button className="level-chip">♡ Lv.{Math.max(1, Math.floor(cat.affection_level / 10) + 1)}</button>
@@ -504,6 +535,7 @@ export default function App() {
     {page === 'shop' && <section className="book-page shop-page">
       <small>FOREST BAZAAR · 叶子币商店</small><h2>松果婆婆的杂货铺</h2><p className="book-intro">完成陪伴任务和探险，换一件送给小猫的礼物。</p>
       <div className="wallet-card"><span>🍃</span><div><small>我的叶子币</small><b>{cat.leaf_coins || 0}</b></div><em>每天都有新故事</em></div>
+      <div className="coin-guide"><b>怎样获得叶子币？</b><div><span><i>✓</i>每日任务<em>最高 45/天</em></span><span><i>⌁</i>每日签到<em>连续签到更多</em></span><span><i>♧</i>探险归来<em>随机 8—18</em></span></div></div>
       <div className="shop-grid">{shopItems.map(item=>{const level=Math.max(1,Math.floor(cat.affection_level/10)+1);const canBuy=level>=item.level&&(cat.leaf_coins||0)>=item.price;return <article key={item.id} className={item.owned?'owned':''}><div className="shop-art"><i>{item.icon}</i><span>{item.category==='accessory'?'配饰':'服装'}</span></div><h3>{item.name}</h3><small>亲密 Lv.{item.level} 解锁</small><button disabled={item.owned||!canBuy||shopBusy===item.id} onClick={()=>buyItem(item)}>{item.owned?'已拥有':shopBusy===item.id?'打包中…':`${item.price} 🍃`}</button></article>})}</div>
     </section>}
 
@@ -514,7 +546,7 @@ export default function App() {
       <button className={page==='shop'?'active':''} onClick={()=>setPage('shop')}><i>♧</i><span>商店</span></button>
     </nav>
 
-    {dailyOpen && <div className="daily-overlay" onClick={()=>setDailyOpen(false)}><section onClick={e=>e.stopPropagation()}><header><div><small>DAILY WITH ME</small><h3>今日陪伴任务</h3></div><button onClick={()=>setDailyOpen(false)}>×</button></header><div className="daily-list">{dailyTasks.map(task=>{const done=task.progress>=task.target;return <article key={task.id} className={task.claimed?'claimed':''}><i>{task.icon}</i><div><b>{task.title}</b><span>{task.progress}/{task.target}</span><em><u style={{width:`${Math.min(100,task.progress/task.target*100)}%`}} /></em></div><button disabled={!done||task.claimed} onClick={()=>claimTask(task.id)}>{task.claimed?'已领取':done?`领取 ${task.reward} 🍃`:'进行中'}</button></article>})}</div><footer>每天陪伴一点点，关系就会慢慢长大。</footer></section></div>}
+    {dailyOpen && <div className="daily-overlay" onClick={()=>setDailyOpen(false)}><section onClick={e=>e.stopPropagation()}><header><div><small>DAILY WITH ME</small><h3>今日陪伴任务</h3></div><button onClick={()=>setDailyOpen(false)}>×</button></header>{checkin&&<div className={`checkin-card ${checkin.can_claim?'':'done'}`}><div><i>☀</i><span><b>每日见面礼</b><small>已连续陪伴 {checkin.streak} 天</small></span></div><button disabled={!checkin.can_claim} onClick={claimCheckin}>{checkin.can_claim?`领取 ${checkin.reward} 🍃`:'今天已领取'}</button></div>}<div className="daily-list">{dailyTasks.map(task=>{const done=task.progress>=task.target;return <article key={task.id} className={task.claimed?'claimed':''}><i>{task.icon}</i><div><b>{task.title}</b><span>{task.progress}/{task.target}</span><em><u style={{width:`${Math.min(100,task.progress/task.target*100)}%`}} /></em></div><button disabled={!done||task.claimed} onClick={()=>claimTask(task.id)}>{task.claimed?'已领取':done?`领取 ${task.reward} 🍃`:'进行中'}</button></article>})}</div><footer>每天陪伴一点点，关系就会慢慢长大。</footer></section></div>}
 
     {chatOpen && <div className="chat-overlay"><section className="chat-panel">
       <header><button onClick={()=>setChatOpen(false)}>⌄</button><div className="chat-cat-face">•ᴗ•</div><div><b>{cat.name}</b><small><i />正在听你说</small></div><button className="memory-button" onClick={openMemories}>回忆</button></header>

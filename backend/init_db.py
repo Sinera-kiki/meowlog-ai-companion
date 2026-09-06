@@ -17,7 +17,9 @@ CREATE TABLE IF NOT EXISTS cats (
     accessory TEXT DEFAULT 'scarf',     -- 配饰槽
     clothing TEXT DEFAULT 'none',       -- 服装槽
     leaf_coins INT DEFAULT 30,           -- 探险与任务奖励叶子币
-    owned_items TEXT[] DEFAULT ARRAY['scarf','moss_cape']::TEXT[],
+    owned_items TEXT[] DEFAULT ARRAY['scarf','daisy','moss_cape','picnic_apron']::TEXT[],
+    last_checkin_date DATE,
+    checkin_streak INT DEFAULT 0,
     daily_date DATE DEFAULT CURRENT_DATE,
     daily_progress JSONB DEFAULT '{"feed":0,"pet":0,"play":0,"chat":0,"claimed":[]}'::jsonb,
     last_interact_time TIMESTAMPTZ DEFAULT NOW(), -- 上次互动时间（用于离线懒计算）
@@ -76,12 +78,15 @@ ALTER TABLE cats ADD COLUMN IF NOT EXISTS outfit TEXT DEFAULT 'scarf';
 ALTER TABLE cats ADD COLUMN IF NOT EXISTS accessory TEXT DEFAULT 'scarf';
 ALTER TABLE cats ADD COLUMN IF NOT EXISTS clothing TEXT DEFAULT 'none';
 ALTER TABLE cats ADD COLUMN IF NOT EXISTS leaf_coins INT DEFAULT 30;
-ALTER TABLE cats ADD COLUMN IF NOT EXISTS owned_items TEXT[] DEFAULT ARRAY['scarf','moss_cape']::TEXT[];
+ALTER TABLE cats ADD COLUMN IF NOT EXISTS owned_items TEXT[] DEFAULT ARRAY['scarf','daisy','moss_cape','picnic_apron']::TEXT[];
+ALTER TABLE cats ADD COLUMN IF NOT EXISTS last_checkin_date DATE;
+ALTER TABLE cats ADD COLUMN IF NOT EXISTS checkin_streak INT DEFAULT 0;
 ALTER TABLE cats ADD COLUMN IF NOT EXISTS daily_date DATE DEFAULT CURRENT_DATE;
 ALTER TABLE cats ADD COLUMN IF NOT EXISTS daily_progress JSONB DEFAULT '{"feed":0,"pet":0,"play":0,"chat":0,"claimed":[]}'::jsonb;
 UPDATE cats SET leaf_coins=30 WHERE leaf_coins=0;
-UPDATE cats SET owned_items = ARRAY(SELECT DISTINCT unnest(owned_items || ARRAY[COALESCE(accessory,'scarf'),COALESCE(NULLIF(clothing,'none'),'moss_cape')]))
-WHERE owned_items IS NOT NULL;
+UPDATE cats SET owned_items = ARRAY(
+  SELECT DISTINCT unnest(owned_items || ARRAY['scarf','daisy','moss_cape','picnic_apron',COALESCE(accessory,'scarf'),COALESCE(NULLIF(clothing,'none'),'moss_cape')])
+) WHERE owned_items IS NOT NULL;
 ALTER TABLE memories ADD COLUMN IF NOT EXISTS emotion TEXT;
 ALTER TABLE memories ADD COLUMN IF NOT EXISTS importance INT DEFAULT 2;
 ALTER TABLE memories ADD COLUMN IF NOT EXISTS entities JSONB DEFAULT '{}'::jsonb;

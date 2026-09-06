@@ -292,6 +292,40 @@ def get_daily_tasks():
     return {"tasks": tasks, "leaf_coins": cat["leaf_coins"]}
 
 
+@app.get("/api/checkin")
+def get_checkin():
+    user = _require_user()
+    with _get_db_conn() as conn:
+        cat = conn.execute("SELECT * FROM cats WHERE owner_id=%s", (user["userId"],)).fetchone()
+    if not cat:
+        raise HTTPException(status_code=404, detail="No cat found")
+    can_claim = cat.get("last_checkin_date") != date.today()
+    next_streak = (cat.get("checkin_streak") or 0) + 1
+    reward = 10 + min(next_streak, 7) * 2
+    return {"can_claim": can_claim, "streak": cat.get("checkin_streak") or 0, "reward": reward}
+
+
+@app.post("/api/checkin")
+def claim_checkin():
+    user = _require_user()
+    with _get_db_conn() as conn:
+        cat = conn.execute("SELECT * FROM cats WHERE owner_id=%s FOR UPDATE", (user["userId"],)).fetchone()
+        if not cat:
+            raise HTTPException(status_code=404, detail="No cat found")
+        last = cat.get("last_checkin_date")
+        if last == date.today():
+            raise HTTPException(status_code=409, detail="Already checked in today")
+        streak = (cat.get("checkin_streak") or 0) + 1 if last == date.today() - timedelta(days=1) else 1
+        reward = 10 + min(streak, 7) * 2
+        updated = conn.execute(
+            "UPDATE cats SET last_checkin_date=CURRENT_DATE,checkin_streak=%s,"
+            " leaf_coins=leaf_coins+%s WHERE id=%s RETURNING *",
+            (streak, reward, cat["id"]),
+        ).fetchone()
+        conn.commit()
+    return {"cat": updated, "streak": streak, "reward": reward}
+
+
 @app.post("/api/daily/claim")
 def claim_daily_task(body: TaskClaimIn):
     user = _require_user()

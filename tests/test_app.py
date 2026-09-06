@@ -34,17 +34,19 @@ def test_adopt_interact_and_dual_slot_outfit():
     )
     assert adopted.status_code == 200
     assert client.post("/api/cat/interact", headers=headers, json={"action_type": "pet"}).status_code == 200
+    client.post("/api/cat/interact", headers=headers, json={"action_type": "feed"})
+    client.post("/api/daily/claim", headers=headers, json={"task_id": "feed"})
     shop = client.get("/api/shop", headers=headers).json()
-    assert any(item["id"] == "daisy" and not item["owned"] for item in shop["items"])
-    assert client.post("/api/shop/buy", headers=headers, json={"item_id": "daisy"}).status_code == 200
+    assert any(item["id"] == "satchel" and not item["owned"] for item in shop["items"])
+    assert client.post("/api/shop/buy", headers=headers, json={"item_id": "satchel"}).status_code == 200
     assert client.post(
-        "/api/cat/outfit", headers=headers, json={"outfit": "daisy", "slot": "accessory"}
+        "/api/cat/outfit", headers=headers, json={"outfit": "satchel", "slot": "accessory"}
     ).status_code == 200
     assert client.post(
         "/api/cat/outfit", headers=headers, json={"outfit": "moss_cape", "slot": "clothing"}
     ).status_code == 200
     cat = client.get("/api/cat/status", headers=headers).json()["cat"]
-    assert cat["accessory"] == "daisy"
+    assert cat["accessory"] == "satchel"
     assert cat["clothing"] == "moss_cape"
 
 
@@ -58,6 +60,17 @@ def test_daily_task_reward():
     claimed = client.post("/api/daily/claim", headers=headers, json={"task_id": "feed"})
     assert claimed.status_code == 200
     assert claimed.json()["cat"]["leaf_coins"] == 38
+
+
+def test_daily_checkin_reward():
+    headers = guest_headers()
+    client.post("/api/cat/adopt", headers=headers, json={"name": "米粒", "persona_tag": "哲学发呆猫"})
+    preview = client.get("/api/checkin", headers=headers).json()
+    assert preview["can_claim"] is True
+    claimed = client.post("/api/checkin", headers=headers)
+    assert claimed.status_code == 200
+    assert claimed.json()["cat"]["leaf_coins"] == 42
+    assert client.post("/api/checkin", headers=headers).status_code == 409
 
 
 def test_adventure_can_start():
