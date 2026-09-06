@@ -24,6 +24,14 @@ echo "==> [1/6] 安装 Docker"
 if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
 fi
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<'EOF'
+{
+  "registry-mirrors": ["https://mirror.ccs.tencentyun.com"]
+}
+EOF
+systemctl enable docker 2>/dev/null || true
+systemctl restart docker 2>/dev/null || true
 
 echo "==> [2/6] 安装 docker compose 插件"
 if ! docker compose version >/dev/null 2>&1; then
