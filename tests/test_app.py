@@ -34,6 +34,9 @@ def test_adopt_interact_and_dual_slot_outfit():
     )
     assert adopted.status_code == 200
     assert client.post("/api/cat/interact", headers=headers, json={"action_type": "pet"}).status_code == 200
+    shop = client.get("/api/shop", headers=headers).json()
+    assert any(item["id"] == "daisy" and not item["owned"] for item in shop["items"])
+    assert client.post("/api/shop/buy", headers=headers, json={"item_id": "daisy"}).status_code == 200
     assert client.post(
         "/api/cat/outfit", headers=headers, json={"outfit": "daisy", "slot": "accessory"}
     ).status_code == 200
@@ -43,6 +46,18 @@ def test_adopt_interact_and_dual_slot_outfit():
     cat = client.get("/api/cat/status", headers=headers).json()["cat"]
     assert cat["accessory"] == "daisy"
     assert cat["clothing"] == "moss_cape"
+
+
+def test_daily_task_reward():
+    headers = guest_headers()
+    client.post("/api/cat/adopt", headers=headers, json={"name": "雪团", "persona_tag": "黏人甜心"})
+    client.post("/api/cat/interact", headers=headers, json={"action_type": "feed"})
+    daily = client.get("/api/daily", headers=headers).json()
+    feed = next(task for task in daily["tasks"] if task["id"] == "feed")
+    assert feed["progress"] == 1
+    claimed = client.post("/api/daily/claim", headers=headers, json={"task_id": "feed"})
+    assert claimed.status_code == 200
+    assert claimed.json()["cat"]["leaf_coins"] == 38
 
 
 def test_adventure_can_start():

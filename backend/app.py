@@ -6,7 +6,7 @@ import os
 import random
 import re
 from contextvars import ContextVar
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated
 
@@ -80,6 +80,44 @@ class ChatIn(BaseModel):
 class OutfitIn(BaseModel):
     outfit: str
     slot: str
+
+class TaskClaimIn(BaseModel):
+    task_id: str
+
+class ShopBuyIn(BaseModel):
+    item_id: str
+
+DAILY_TASKS = [
+    {"id": "feed", "title": "早餐小鱼干", "target": 1, "reward": 8, "icon": "🐟"},
+    {"id": "pet", "title": "摸摸小脑袋", "target": 3, "reward": 10, "icon": "♡"},
+    {"id": "play", "title": "一起玩毛线球", "target": 2, "reward": 12, "icon": "🧶"},
+    {"id": "chat", "title": "说说今天的事", "target": 1, "reward": 15, "icon": "☁"},
+]
+
+SHOP_ITEMS = [
+    {"id":"scarf","name":"赤豆围巾","category":"accessory","price":0,"level":1,"icon":"⌁"},
+    {"id":"daisy","name":"林间雏菊","category":"accessory","price":24,"level":1,"icon":"✿"},
+    {"id":"satchel","name":"探险挎包","category":"accessory","price":38,"level":1,"icon":"▱"},
+    {"id":"nightcap","name":"云朵睡帽","category":"accessory","price":52,"level":2,"icon":"☁"},
+    {"id":"bow","name":"海盐领结","category":"accessory","price":68,"level":3,"icon":"⋈"},
+    {"id":"box","name":"神秘纸箱","category":"accessory","price":90,"level":4,"icon":"□"},
+    {"id":"moss_cape","name":"苔藓小斗篷","category":"clothing","price":0,"level":1,"icon":"♠"},
+    {"id":"picnic_apron","name":"野餐格围裙","category":"clothing","price":32,"level":1,"icon":"▦"},
+    {"id":"raincoat","name":"青柠雨衣","category":"clothing","price":55,"level":2,"icon":"♧"},
+    {"id":"acorn_knit","name":"橡果针织衫","category":"clothing","price":64,"level":2,"icon":"♨"},
+    {"id":"berry_dress","name":"莓果小礼服","category":"clothing","price":88,"level":3,"icon":"♛"},
+    {"id":"moon_robe","name":"月光睡袍","category":"clothing","price":108,"level":4,"icon":"☾"},
+]
+
+def _reset_daily_if_needed(conn, cat: dict) -> dict:
+    if cat.get("daily_date") == date.today():
+        return cat
+    return conn.execute(
+        "UPDATE cats SET daily_date=CURRENT_DATE,"
+        " daily_progress='{\"feed\":0,\"pet\":0,\"play\":0,\"chat\":0,\"claimed\":[]}'::jsonb"
+        " WHERE id=%s RETURNING *",
+        (cat["id"],),
+    ).fetchone()
 
 # ---------------------------------------------------------------------------
 # FastAPI app & Core Logic
@@ -173,6 +211,7 @@ def interact_cat(body: InteractIn):
         cat = conn.execute("SELECT * FROM cats WHERE owner_id = %s", (user["userId"],)).fetchone()
         if not cat:
             raise HTTPException(status_code=404, detail="No cat found")
+        cat = _reset_daily_if_needed(conn, cat)
 
         new_satiety = cat["satiety_level"]
         new_mood = cat["mood_level"]
@@ -195,10 +234,13 @@ def interact_cat(body: InteractIn):
         else:
             raise HTTPException(status_code=400, detail="Unsupported action")
 
+        progress = dict(cat.get("daily_progress") or {})
+        progress[body.action_type] = int(progress.get(body.action_type, 0)) + 1
+        progress.setdefault("claimed", [])
         updated = conn.execute(
             "UPDATE cats SET satiety_level=%s, mood_level=%s, affection_level=%s,"
-            " current_status=%s, last_interact_time=NOW() WHERE id=%s RETURNING *",
-            (new_satiety, new_mood, new_affection, status, cat["id"]),
+            " current_status=%s, daily_progress=%s, last_interact_time=NOW() WHERE id=%s RETURNING *",
+            (new_satiety, new_mood, new_affection, status, json.dumps(progress), cat["id"]),
         ).fetchone()
         conn.commit()
     return {"message": "success", "action": body.action_type, "cat": updated}
@@ -217,6 +259,8 @@ def change_outfit(body: OutfitIn):
         cat = conn.execute("SELECT * FROM cats WHERE owner_id = %s", (user["userId"],)).fetchone()
         if not cat:
             raise HTTPException(status_code=404, detail="No cat found")
+        if body.outfit not in (cat.get("owned_items") or []):
+            raise HTTPException(status_code=403, detail="Purchase this item first")
         required_level = {"scarf": 1, "daisy": 1, "satchel": 1, "nightcap": 2, "bow": 3, "box": 4, "moss_cape": 1, "picnic_apron": 1, "raincoat": 2, "acorn_knit": 2, "berry_dress": 3, "moon_robe": 4}[body.outfit]
         current_level = max(1, cat["affection_level"] // 10 + 1)
         if current_level < required_level:
@@ -228,6 +272,89 @@ def change_outfit(body: OutfitIn):
         ).fetchone()
         conn.commit()
     return {"cat": updated}
+
+
+@app.get("/api/daily")
+def get_daily_tasks():
+    user = _require_user()
+    with _get_db_conn() as conn:
+        cat = conn.execute("SELECT * FROM cats WHERE owner_id=%s", (user["userId"],)).fetchone()
+        if not cat:
+            raise HTTPException(status_code=404, detail="No cat found")
+        cat = _reset_daily_if_needed(conn, cat)
+        conn.commit()
+    progress = cat.get("daily_progress") or {}
+    claimed = set(progress.get("claimed", []))
+    tasks = [
+        {**task, "progress": min(task["target"], int(progress.get(task["id"], 0))), "claimed": task["id"] in claimed}
+        for task in DAILY_TASKS
+    ]
+    return {"tasks": tasks, "leaf_coins": cat["leaf_coins"]}
+
+
+@app.post("/api/daily/claim")
+def claim_daily_task(body: TaskClaimIn):
+    user = _require_user()
+    task = next((item for item in DAILY_TASKS if item["id"] == body.task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    with _get_db_conn() as conn:
+        cat = conn.execute("SELECT * FROM cats WHERE owner_id=%s FOR UPDATE", (user["userId"],)).fetchone()
+        if not cat:
+            raise HTTPException(status_code=404, detail="No cat found")
+        cat = _reset_daily_if_needed(conn, cat)
+        progress = dict(cat.get("daily_progress") or {})
+        claimed = list(progress.get("claimed", []))
+        if body.task_id in claimed:
+            raise HTTPException(status_code=409, detail="Task already claimed")
+        if int(progress.get(body.task_id, 0)) < task["target"]:
+            raise HTTPException(status_code=409, detail="Task is not complete")
+        claimed.append(body.task_id)
+        progress["claimed"] = claimed
+        updated = conn.execute(
+            "UPDATE cats SET daily_progress=%s,leaf_coins=leaf_coins+%s WHERE id=%s RETURNING *",
+            (json.dumps(progress), task["reward"], cat["id"]),
+        ).fetchone()
+        conn.commit()
+    return {"cat": updated, "reward": task["reward"]}
+
+
+@app.get("/api/shop")
+def get_shop():
+    user = _require_user()
+    with _get_db_conn() as conn:
+        cat = conn.execute("SELECT * FROM cats WHERE owner_id=%s", (user["userId"],)).fetchone()
+    if not cat:
+        raise HTTPException(status_code=404, detail="No cat found")
+    owned = set(cat.get("owned_items") or [])
+    return {"items": [{**item, "owned": item["id"] in owned} for item in SHOP_ITEMS], "leaf_coins": cat["leaf_coins"]}
+
+
+@app.post("/api/shop/buy")
+def buy_shop_item(body: ShopBuyIn):
+    user = _require_user()
+    item = next((entry for entry in SHOP_ITEMS if entry["id"] == body.item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    with _get_db_conn() as conn:
+        cat = conn.execute("SELECT * FROM cats WHERE owner_id=%s FOR UPDATE", (user["userId"],)).fetchone()
+        if not cat:
+            raise HTTPException(status_code=404, detail="No cat found")
+        owned = list(cat.get("owned_items") or [])
+        if item["id"] in owned:
+            raise HTTPException(status_code=409, detail="Item already owned")
+        level = max(1, cat["affection_level"] // 10 + 1)
+        if level < item["level"]:
+            raise HTTPException(status_code=403, detail=f"Requires level {item['level']}")
+        if cat["leaf_coins"] < item["price"]:
+            raise HTTPException(status_code=409, detail="Not enough leaf coins")
+        owned.append(item["id"])
+        updated = conn.execute(
+            "UPDATE cats SET leaf_coins=leaf_coins-%s,owned_items=%s WHERE id=%s RETURNING *",
+            (item["price"], owned, cat["id"]),
+        ).fetchone()
+        conn.commit()
+    return {"cat": updated, "item": item}
 
 
 ADVENTURE_DESTINATIONS = [
@@ -390,6 +517,11 @@ async def chat_with_cat(body: ChatIn):
         cat = conn.execute("SELECT * FROM cats WHERE owner_id=%s", (user["userId"],)).fetchone()
         if not cat:
             raise HTTPException(status_code=404, detail="No cat found")
+        cat = _reset_daily_if_needed(conn, cat)
+        progress = dict(cat.get("daily_progress") or {})
+        progress["chat"] = int(progress.get("chat", 0)) + 1
+        progress.setdefault("claimed", [])
+        conn.execute("UPDATE cats SET daily_progress=%s WHERE id=%s", (json.dumps(progress), cat["id"]))
         conn.execute(
             "INSERT INTO chat_logs (owner_id,cat_id,role,content) VALUES (%s,%s,'user',%s)",
             (user["userId"], cat["id"], body.message),
