@@ -448,6 +448,7 @@ export default function App() {
       <button className="level-chip">♡ Lv.{Math.max(1, Math.floor(cat.affection_level / 10) + 1)}</button>
     </header>
 
+    <div className="game-scroll-area">
     {page === 'home' && <>
       <section className="room-card">
         <div className="sun-glow" /><div className="window"><i /><b /><span className="cloud c1" /><span className="cloud c2" /></div>
@@ -544,6 +545,7 @@ export default function App() {
       <div className="coin-guide"><b>怎样获得叶子币？</b><div><span><i>✓</i>每日任务<em>最高 45/天</em></span><span><i>⌁</i>每日签到<em>连续签到更多</em></span><span><i>♧</i>探险归来<em>随机 8—18</em></span></div></div>
       <div className="shop-grid">{shopItems.map(item=>{const level=Math.max(1,Math.floor(cat.affection_level/10)+1);const canBuy=level>=item.level&&(cat.leaf_coins||0)>=item.price;return <article key={item.id} className={item.owned?'owned':''}><div className="shop-art"><i>{item.icon}</i><span>{item.category==='accessory'?'配饰':'服装'}</span></div><h3>{item.name}</h3><small>亲密 Lv.{item.level} 解锁</small><button disabled={item.owned||!canBuy||shopBusy===item.id} onClick={()=>buyItem(item)}>{item.owned?'已拥有':shopBusy===item.id?'打包中…':`${item.price} 🍃`}</button></article>})}</div>
     </section>}
+    </div>
 
     <nav className="bottom-nav">
       <button className={page==='home'?'active':''} onClick={()=>setPage('home')}><i>⌂</i><span>小屋</span></button>
