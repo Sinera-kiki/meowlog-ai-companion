@@ -6,6 +6,7 @@ import './tailoring-fix.css';
 import './adventure.css';
 import './memory.css';
 import './gameplay.css';
+import './adoption-upgrade.css';
 
 type Role = 'user' | 'cat';
 type Action = 'feed' | 'pet' | 'play' | null;
@@ -183,6 +184,8 @@ export default function App() {
   const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
   const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [shopBusy, setShopBusy] = useState<string | null>(null);
+  const [adoptName, setAdoptName] = useState('');
+  const [selectedPersona, setSelectedPersona] = useState(PERSONALITIES[1][0]);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -252,8 +255,8 @@ export default function App() {
 
   async function adopt(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    const payload = { name: form.get('name'), persona_tag: form.get('persona') };
+    const selected = PERSONALITIES.find(([name]) => name === selectedPersona) || PERSONALITIES[1];
+    const payload = { name: adoptName.trim(), persona_tag: `${selected[0]}（${selected[1]}）` };
     const res = await apiFetch('/api/cat/adopt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const data = await res.json();
     setCat(data); setMessages([{ role: 'cat', content: `喵呜，我是${data.name}。从今天开始，这里就是我们的家啦。` }]);
@@ -378,16 +381,24 @@ export default function App() {
 
   if (loading) return <div className="loading"><span className="loading-cat">🐾</span><p>正在推开小屋的门…</p></div>;
 
-  if (!cat) return <main className="adoption-page">
-    <section className="adoption-card">
-      <div className="box-cat"><span>♡</span></div>
-      <small>MEOWLOG · 初次相遇</small><h1>给彼此一个家</h1><p>它会拥有自己的生活，也会慢慢记住关于你的每一件小事。</p>
-      <form onSubmit={adopt}>
-        <label>它的名字<input name="name" maxLength={12} placeholder="例如：晚晚、团子、乌云" required /></label>
-        <label>它是什么样的小猫<select name="persona">{PERSONALITIES.map(([name, desc]) => <option key={name} value={`${name}（${desc}）`}>{name} · {desc}</option>)}</select></label>
-        <button>打开纸箱，带它回家 <b>→</b></button>
-      </form>
+  if (!cat) return <main className="adoption-page storybook-adoption">
+    <div className="forest-layer forest-back"/><div className="forest-layer forest-front"/>
+    <header className="adoption-brand"><span>MEOWLOG</span><small>一只真正记得你的猫</small></header>
+    <section className="adoption-hero">
+      <div className="firefly f1"/><div className="firefly f2"/><div className="firefly f3"/>
+      <div className="adoption-cat-preview"><div className="leaf-crown">❧</div><CatIllustration action={null} accessory="daisy" clothing="none" onPet={() => {}}/><div className="woven-basket"><i/><b/></div></div>
+      <div className="waiting-pill"><i/> 森林里有一只小猫正在等你</div>
+      <h1>把今天的心事，<br/><em>分一半给它。</em></h1>
+      <p>它会独自生活、外出探险，也会在你不开心时安静听你说完。</p>
     </section>
+    <form className="adoption-form" onSubmit={adopt}>
+      <div className="form-step"><span>01</span><div><b>先给它一个名字</b><small>以后它会在每封明信片上署名</small></div></div>
+      <label className="name-field"><span>{adoptName.trim().slice(0,1) || '喵'}</span><input value={adoptName} onChange={e=>setAdoptName(e.target.value)} maxLength={12} placeholder="例如：晚晚、团子、乌云" aria-label="小猫名字" required/><i>{adoptName.length}/12</i></label>
+      <div className="form-step"><span>02</span><div><b>它有怎样的灵魂？</b><small>性格会影响聊天语气和探险选择</small></div></div>
+      <div className="persona-carousel">{PERSONALITIES.map(([name,desc],index)=><button type="button" key={name} aria-pressed={selectedPersona===name} className={selectedPersona===name?'selected':''} onClick={()=>setSelectedPersona(name)}><i>{['傲','甜','思','探','懒','护'][index]}</i><b>{name}</b><small>{desc}</small><em>✓</em></button>)}</div>
+      <button className="adopt-submit" disabled={!adoptName.trim()}><span>带 {adoptName.trim() || '它'} 回家</span><i>→</i></button>
+      <p className="adoption-promise"><i>♡</i> 每段记忆都由你决定是否保留</p>
+    </form>
   </main>;
 
   const adventureRemaining = currentAdventure ? Math.max(0, new Date(currentAdventure.returns_at).getTime() - clock) : 0;
