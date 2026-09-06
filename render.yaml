@@ -4,6 +4,7 @@ services:
     runtime: docker
     plan: free
     healthCheckPath: /health
+    autoDeployTrigger: commit
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -13,8 +14,8 @@ services:
         value: https://api.openai.com/v1
       - key: LLM_MODEL
         value: gpt-4o-mini
-      - key: LLM_API_KEY
-        sync: false
+      - key: ADVENTURE_DURATION_SECONDS
+        value: "45"
 
 databases:
   - name: meowlog-db

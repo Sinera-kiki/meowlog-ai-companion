@@ -15,4 +15,4 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ ./backend/
 COPY --from=frontend-builder /build/frontend/dist ./frontend/dist
 EXPOSE 8000
-CMD ["sh", "-c", "python -m backend.init_db && exec uvicorn backend.app:app --host 0.0.0.0 --port ${APP_PORT}"]
+CMD ["sh", "-c", "python -m backend.init_db && exec uvicorn backend.app:app --host 0.0.0.0 --port ${PORT:-8000}"]

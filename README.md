@@ -1,5 +1,8 @@
 # MeowLog · 喵喵日记
 
+[![CI](https://github.com/Sinera-kiki/meowlog-ai-companion/actions/workflows/ci.yml/badge.svg)](https://github.com/Sinera-kiki/meowlog-ai-companion/actions/workflows/ci.yml)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Sinera-kiki/meowlog-ai-companion)
+
 一款面向移动端的 AI 治愈系虚拟宠物游戏。玩家可以领养具有不同性格的猫咪，通过喂食、抚摸、玩耍和对话建立关系；猫咪拥有独立状态、长期记忆、双槽位换装和离线生活。
 
 > 当前状态：作品集级全栈 MVP，已打通互动、AI 记忆、探险、手帐与奖励循环。
@@ -90,8 +93,9 @@ GitHub Actions 会自动执行前端构建、数据库初始化、API 测试和 
 
 1. 将仓库推送到 GitHub。
 2. 在 Render 创建 Blueprint，选择本仓库。
-3. 填写 `LLM_API_KEY`；数据库和其他变量自动创建。
-4. 部署完成后获得公开访问地址。
+3. 确认创建 Web Service 与 PostgreSQL。
+4. 部署完成后获得公开访问地址；未配置密钥时使用内置演示回复。
+5. 如需真实 AI，在 Render 服务的 Environment 中添加 `LLM_API_KEY`，并按需修改 `LLM_BASE_URL` 与 `LLM_MODEL`。
 
 ## 数据与隐私
 
