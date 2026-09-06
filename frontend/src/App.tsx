@@ -172,7 +172,12 @@ export default function App() {
   const [input, setInput] = useState('');
   const [action, setAction] = useState<Action>(null);
   const [particles, setParticles] = useState<Particle[]>([]);
-  const [page, setPage] = useState<Page>('home');
+  const [page, setPage] = useState<Page>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab === 'journal' || tab === 'wardrobe' || tab === 'shop') return tab;
+    return 'home';
+  });
   const [chatOpen, setChatOpen] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [closetTab, setClosetTab] = useState<ClosetTab>('accessory');
@@ -197,8 +202,9 @@ export default function App() {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    apiFetch('/api/cat/status').then(r => r.json()).then(data => {
-      if (data.has_cat) { setCat(data.cat); loadDaily(); }
+    const isMockOnboard = window.location.search.includes('onboard=1');
+    apiFetch('/api/cat/status' + (isMockOnboard ? '?onboard=1' : '')).then(r => r.json()).then(data => {
+      if (data.has_cat && !isMockOnboard) { setCat(data.cat); loadDaily(); }
     }).finally(() => setLoading(false));
   }, []);
 
