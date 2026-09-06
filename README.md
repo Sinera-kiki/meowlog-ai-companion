@@ -38,6 +38,8 @@ flowchart LR
 
 ## 本地运行
 
+> 国内部署（阿里云/腾讯云）请看 [`deploy/README.md`](deploy/README.md)，或者直接在服务器上执行一条一键脚本。
+
 ### 方式一：Docker Compose（推荐）
 
 ```bash
