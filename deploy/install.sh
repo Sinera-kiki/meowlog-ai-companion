@@ -9,18 +9,29 @@ set -euo pipefail
 REPO_URL="https://github.com/Sinera-kiki/meowlog-ai-companion.git"
 APP_DIR="/opt/meowlog"
 
-echo "==> [1/5] 安装 Docker"
+echo "==> [0/6] 准备基础环境与交换空间"
+apt-get update -y
+apt-get install -y curl git ca-certificates
+if [ "$(swapon --show | wc -l)" -eq 0 ] && [ "$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)" -le 2200 ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+echo "==> [1/6] 安装 Docker"
 if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
 fi
 
-echo "==> [2/5] 安装 docker compose 插件"
+echo "==> [2/6] 安装 docker compose 插件"
 if ! docker compose version >/dev/null 2>&1; then
   apt-get update -y
   apt-get install -y docker-compose-plugin
 fi
 
-echo "==> [3/5] 拉取代码"
+echo "==> [3/6] 拉取代码"
 if [ -d "$APP_DIR/.git" ]; then
   cd "$APP_DIR"
   git pull --ff-only
@@ -30,15 +41,18 @@ else
   cd "$APP_DIR"
 fi
 
-echo "==> [4/5] 准备环境变量"
+echo "==> [4/6] 准备环境变量"
 [ -f .env ] || cp .env.example .env
 if [ -n "${LLM_API_KEY:-}" ]; then
   sed -i "s|^LLM_API_KEY=.*|LLM_API_KEY=${LLM_API_KEY}|" .env
   sed -i "s|^LLM_BASE_URL=.*|LLM_BASE_URL=${LLM_BASE_URL:-https://api.openai.com/v1}|" .env
 fi
 
-echo "==> [5/5] 构建并启动"
+echo "==> [5/6] 构建并启动"
 docker compose up -d --build
+
+echo "==> [6/6] 检查服务状态"
+docker compose ps
 
 IP=$(hostname -I | awk '{print $1}')
 echo ""
