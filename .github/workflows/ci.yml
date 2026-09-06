@@ -24,6 +24,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://meowlog:meowlog@localhost:5432/meowlog_test
       ADVENTURE_DURATION_SECONDS: 15
+      PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
