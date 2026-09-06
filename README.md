@@ -10,7 +10,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 
-**[🌐 在线体验公网 Demo](http://154.8.153.135:8000)** · **[📖 产品案例深度剖析](docs/PRODUCT_CASE_STUDY.md)** · **[🏗️ 系统架构设计](docs/ARCHITECTURE.md)** · **[🎮 游戏与经济设计](docs/GAME_DESIGN.md)**
+**[🎮 立即在线试玩 (Live Game)](http://154.8.153.135:8000)** · **[📖 产品案例深度剖析](docs/PRODUCT_CASE_STUDY.md)** · **[🏗️ 系统架构设计](docs/ARCHITECTURE.md)** · **[🎮 游戏与经济设计](docs/GAME_DESIGN.md)**
 
 ---
 
