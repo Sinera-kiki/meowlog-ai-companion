@@ -1,0 +1,28 @@
+# secrets and runtime config
+.env
+.env.*
+!.env.example
+*.properties
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.python-deps/
+
+# Node
+node_modules/
+frontend/dist/
+npm-debug.log*
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Internal deployment metadata
+.cowork/
+.cowork.json
+*.zip
